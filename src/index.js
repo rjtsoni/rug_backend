@@ -24,6 +24,7 @@ app.use('/api/storefront/newsletter', rateLimit({ windowMs: 15 * 60 * 1000, limi
 
 const fail = (res, error, status = 400) => res.status(status).json({ error });
 const COOKIE_AGE_MS = 8 * 60 * 60 * 1000;
+const cookieSameSite = process.env.NODE_ENV === 'production' ? 'None' : 'Lax';
 const readCookie = (req, name) => {
   const item = req.headers.cookie?.split(';').map(part => part.trim()).find(part => part.startsWith(`${name}=`));
   return item ? decodeURIComponent(item.slice(name.length + 1)) : '';
@@ -31,11 +32,11 @@ const readCookie = (req, name) => {
 const setSession = (res, cookieName, claims) => {
   const token = jwt.sign(claims, process.env.JWT_SECRET, { expiresIn: '8h', issuer: 'aara-rugs-api' });
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-  res.setHeader('Set-Cookie', `${cookieName}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${COOKIE_AGE_MS / 1000}${secure}`);
+  res.setHeader('Set-Cookie', `${cookieName}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=${cookieSameSite}; Max-Age=${COOKIE_AGE_MS / 1000}${secure}`);
 };
 const clearSession = (res, cookieName) => {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-  res.setHeader('Set-Cookie', `${cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`);
+  res.setHeader('Set-Cookie', `${cookieName}=; Path=/; HttpOnly; SameSite=${cookieSameSite}; Max-Age=0${secure}`);
 };
 const accountInput = z.object({ name: z.string().trim().min(2).max(100), email: z.string().trim().email().max(254), password: z.string().min(8).max(128), mobile: z.string().trim().min(7).max(25) }).strict();
 const adminRegisterInput = accountInput.extend({ confirmPassword: z.string().min(8).max(128) }).strict().refine(value => value.password === value.confirmPassword, { message: 'Passwords do not match.', path: ['confirmPassword'] });
