@@ -11,9 +11,12 @@ import { Admin, Category, Customer, NewsletterSubscriber, Offer, Order, Page, Pr
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
-const origins = (process.env.FRONTEND_ORIGIN || 'http://localhost:5173,http://localhost:5174').split(',').map(x => x.trim());
+const origins = new Set([
+  ...(process.env.FRONTEND_ORIGIN || 'http://localhost:5173,http://localhost:5174').split(',').map(x => x.trim()),
+  'https://tanuexport.netlify.app'
+]);
 app.use(helmet());
-app.use(cors({ origin: (origin, done) => !origin || origins.includes(origin) ? done(null, true) : done(new Error('Origin not allowed')), credentials: true }));
+app.use(cors({ origin: (origin, done) => !origin || origins.has(origin) ? done(null, true) : done(new Error('Origin not allowed')), credentials: true }));
 app.use(express.json({ limit: '12mb' }));
 app.use(['/api/auth/login', '/api/auth/register', '/api/customer/login', '/api/customer/register'], rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: 'draft-7', legacyHeaders: false }));
 app.use('/api/storefront/newsletter', rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, standardHeaders: 'draft-7', legacyHeaders: false }));
