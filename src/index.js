@@ -13,7 +13,8 @@ const app = express();
 const port = Number(process.env.PORT || 4000);
 const origins = new Set([
   ...(process.env.FRONTEND_ORIGIN || 'http://localhost:5173,http://localhost:5174').split(',').map(x => x.trim()),
-  'https://tanuexport.netlify.app'
+  'https://tanuexport.netlify.app',
+  'https://tanurugsadmin.netlify.app'
 ]);
 app.use(helmet());
 app.use(cors({ origin: (origin, done) => !origin || origins.has(origin) ? done(null, true) : done(new Error('Origin not allowed')), credentials: true }));
@@ -195,12 +196,12 @@ app.get('/api/storefront/products', asyncRoute(async (req, res) => {
   ]);
   res.set('Cache-Control', 'no-store');
   return res.json({ products, page, limit, total, pages: Math.max(1, Math.ceil(total / limit)), keyword, category: categoryName || 'All rugs' });
-}));const newsletterInput = z.object({ email: z.string().trim().email().max(254) }).strict();
+})); const newsletterInput = z.object({ email: z.string().trim().email().max(254) }).strict();
 app.post('/api/storefront/newsletter', objectBody(newsletterInput), asyncRoute(async (req, res) => {
   const email = req.body.email.toLowerCase();
   const subscriber = await NewsletterSubscriber.findOneAndUpdate({ email }, { $setOnInsert: { email } }, { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true });
   return res.status(200).json({ subscribed: true, alreadySubscribed: subscriber.createdAt?.getTime() !== subscriber.updatedAt?.getTime() });
-}));app.get('/api/storefront', asyncRoute(async (_req, res) => {
+})); app.get('/api/storefront', asyncRoute(async (_req, res) => {
   const [settings, categories, products, pages, offers] = await Promise.all([
     Settings.findOne({ key: 'storefront' }).lean(), Category.find({ active: true }).sort({ sortOrder: 1, name: 1 }).lean(),
     Product.find({ active: true }).sort({ sortOrder: 1, createdAt: -1 }).lean(), Page.find({ active: true }).lean(), Offer.find({ active: true }).sort({ sortOrder: 1, createdAt: 1 }).select('message sortOrder').lean()
@@ -271,7 +272,7 @@ app.delete('/api/admin/categories/:id', asyncRoute(async (req, res) => {
 app.get('/api/admin/offers', asyncRoute(async (_req, res) => res.json(await Offer.find().sort({ sortOrder: 1, createdAt: 1 }).lean())));
 app.post('/api/admin/offers', objectBody(offerInput), asyncRoute(async (req, res) => res.status(201).json(await Offer.create(req.body))));
 app.put('/api/admin/offers/:id', objectBody(offerInput), asyncRoute(async (req, res) => { const item = await Offer.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }); return item ? res.json(item) : fail(res, 'Offer not found.', 404); }));
-app.delete('/api/admin/offers/:id', asyncRoute(async (req, res) => { const item = await Offer.findByIdAndDelete(req.params.id); return item ? res.json({ deleted: true }) : fail(res, 'Offer not found.', 404); }));app.get('/api/admin/pages', asyncRoute(async (_req, res) => res.json(await Page.find().sort({ key: 1 }).lean())));
+app.delete('/api/admin/offers/:id', asyncRoute(async (req, res) => { const item = await Offer.findByIdAndDelete(req.params.id); return item ? res.json({ deleted: true }) : fail(res, 'Offer not found.', 404); })); app.get('/api/admin/pages', asyncRoute(async (_req, res) => res.json(await Page.find().sort({ key: 1 }).lean())));
 app.post('/api/admin/pages', objectBody(pageInput), asyncRoute(async (req, res) => res.status(201).json(await Page.create(req.body))));
 app.put('/api/admin/pages/:id', objectBody(pageInput), asyncRoute(async (req, res) => { const item = await Page.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }); return item ? res.json(item) : fail(res, 'Page not found.', 404); }));
 app.delete('/api/admin/pages/:id', asyncRoute(async (req, res) => { const item = await Page.findByIdAndDelete(req.params.id); return item ? res.json({ deleted: true }) : fail(res, 'Page not found.', 404); }));
