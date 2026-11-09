@@ -7,7 +7,7 @@ import rateLimit from 'express-rate-limit';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import { Admin, Category, Customer, NewsletterSubscriber, Offer, Order, Page, Product, Settings } from './models.js';
+import { Admin, Category, ContactMessage, Customer, NewsletterSubscriber, Offer, Order, Page, Product, ProductReview, Settings } from './models.js';
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
@@ -21,6 +21,8 @@ app.use(cors({ origin: (origin, done) => !origin || origins.has(origin) ? done(n
 app.use(express.json({ limit: '12mb' }));
 app.use(['/api/auth/login', '/api/auth/register', '/api/customer/login', '/api/customer/register'], rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: 'draft-7', legacyHeaders: false }));
 app.use('/api/storefront/newsletter', rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, standardHeaders: 'draft-7', legacyHeaders: false }));
+app.use('/api/storefront/contact', rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: 'draft-7', legacyHeaders: false }));
+const productReviewRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHeaders: 'draft-7', legacyHeaders: false });
 
 const fail = (res, error, status = 400) => res.status(status).json({ error });
 const COOKIE_AGE_MS = 8 * 60 * 60 * 1000;
@@ -66,7 +68,7 @@ const objectBody = schema => (req, res, next) => {
   req.body = parsed.data; return next();
 };
 const categoryInput = z.object({ name: z.string().trim().min(1), slug: z.string().trim().min(1), description: z.string().optional(), image: z.string().optional(), note: z.string().optional(), parentCategory: z.string().regex(/^[a-f\d]{24}$/i).nullable().optional(), active: z.boolean().optional(), sortOrder: z.number().optional() }).strict();
-const productInput = z.object({ name: z.string().trim().min(1), slug: z.string().trim().min(1), type: z.string().optional(), description: z.string().optional(), price: z.number().nonnegative(), discountPercentage: z.number().int().min(0).max(100).optional(), compareAtPrice: z.number().nonnegative().nullable().optional(), image: z.string().optional(), images: z.array(z.string()).optional(), sizes: z.array(z.object({ label: z.string().trim().min(1), price: z.number().nonnegative(), discountPercentage: z.number().int().min(0).max(100).default(0), images: z.array(z.string()).min(1).max(4) }).strict()).optional(), details: z.object({ sku: z.string().optional(), material: z.string().optional(), texture: z.string().optional(), pileThickness: z.string().optional(), origin: z.string().optional(), highlights: z.string().optional(), care: z.string().optional(), delivery: z.string().optional(), returns: z.string().optional(), freeDelivery: z.boolean().optional(), deliveryCharge: z.number().nonnegative().optional(), craftImage: z.string().optional(), craftEyebrow: z.string().optional(), craftTitle: z.string().optional(), craftDescription: z.string().optional(), craftSecondParagraph: z.string().optional(), craftPoint1Title: z.string().optional(), craftPoint1Caption: z.string().optional(), craftPoint2Title: z.string().optional(), craftPoint2Caption: z.string().optional(), craftPoint3Title: z.string().optional(), craftPoint3Caption: z.string().optional(), craftStep1Title: z.string().optional(), craftStep1Body: z.string().optional(), craftStep2Title: z.string().optional(), craftStep2Body: z.string().optional(), craftStep3Title: z.string().optional(), craftStep3Body: z.string().optional(), craftExpectTitle: z.string().optional(), craftExpect1: z.string().optional(), craftExpect2: z.string().optional(), craftExpect3: z.string().optional() }).strict().optional(), palette: z.array(z.string()).optional(), design: z.string().optional(), category: z.string().min(1), tag: z.string().optional(), featured: z.boolean().optional(), active: z.boolean().optional(), stock: z.number().int().nonnegative().optional(), sortOrder: z.number().optional() }).strict();
+const productInput = z.object({ name: z.string().trim().min(1), slug: z.string().trim().min(1), type: z.string().optional(), description: z.string().optional(), price: z.number().nonnegative(), discountPercentage: z.number().int().min(0).max(100).optional(), compareAtPrice: z.number().nonnegative().nullable().optional(), image: z.string().optional(), images: z.array(z.string()).optional(), sizes: z.array(z.object({ label: z.string().trim().min(1), price: z.number().nonnegative(), discountPercentage: z.number().int().min(0).max(100).default(0), images: z.array(z.string()).min(1).max(4) }).strict()).optional(), details: z.object({ sku: z.string().optional(), material: z.string().optional(), texture: z.string().optional(), pileThickness: z.string().optional(), origin: z.string().optional(), highlights: z.string().optional(), care: z.string().optional(), delivery: z.string().optional(), returns: z.string().optional(), freeDelivery: z.boolean().optional(), deliveryCharge: z.number().nonnegative().optional(), craftImage: z.string().optional(), craftEyebrow: z.string().optional(), craftTitle: z.string().optional(), craftDescription: z.string().optional(), craftSecondParagraph: z.string().optional(), craftPoint1Title: z.string().optional(), craftPoint1Caption: z.string().optional(), craftPoint2Title: z.string().optional(), craftPoint2Caption: z.string().optional(), craftPoint3Title: z.string().optional(), craftPoint3Caption: z.string().optional(), craftStep1Title: z.string().optional(), craftStep1Body: z.string().optional(), craftStep2Title: z.string().optional(), craftStep2Body: z.string().optional(), craftStep3Title: z.string().optional(), craftStep3Body: z.string().optional(), craftExpectTitle: z.string().optional(), craftExpect1: z.string().optional(), craftExpect2: z.string().optional(), craftExpect3: z.string().optional() }).strict().optional(), palette: z.array(z.string()).optional(), design: z.string().optional(), category: z.string().min(1), tag: z.string().optional(), featured: z.boolean().optional(), youMayAlsoLike: z.boolean().optional(), active: z.boolean().optional(), stock: z.number().int().nonnegative().optional(), sortOrder: z.number().optional() }).strict();
 const pageInput = z.object({ key: z.string().trim().min(1), title: z.string().optional(), subtitle: z.string().optional(), body: z.string().optional(), image: z.string().optional(), active: z.boolean().optional() }).strict();
 const offerInput = z.object({ message: z.string().trim().min(1).max(160), active: z.boolean().default(true), sortOrder: z.number().int().min(0).default(0) }).strict();
 const hash = await bcrypt.hash('x1XeBw5wJOaP87HRQAsSuurC8Jx4P6DEbXjJpiUPmWIF3dGlzpx32', 12);
@@ -169,6 +171,59 @@ app.delete('/api/customer/favorites/:productId', customerAuth, asyncRoute(async 
   return customer ? res.json({ products: customer.favorites || [] }) : fail(res, 'Customer account not found.', 401);
 }));
 
+async function refreshProductReviewStats(productId) {
+  const [stats] = await ProductReview.aggregate([
+    { $match: { product: new mongoose.Types.ObjectId(productId), approved: true } },
+    { $group: { _id: '$product', rating: { $avg: '$rating' }, reviewCount: { $sum: 1 } } }
+  ]);
+  const rating = stats ? Math.round(stats.rating * 10) / 10 : 0;
+  const reviewCount = stats?.reviewCount || 0;
+  await Product.findByIdAndUpdate(productId, { $set: { rating, reviewCount } });
+  return { rating, reviewCount };
+}
+
+async function addProductReviewStats(products) {
+  if (!products.length) return products;
+  const ids = products.map(product => product._id);
+  const stats = await ProductReview.aggregate([
+    { $match: { product: { $in: ids }, approved: true } },
+    { $group: { _id: '$product', rating: { $avg: '$rating' }, reviewCount: { $sum: 1 } } }
+  ]);
+  const byProduct = new Map(stats.map(item => [String(item._id), item]));
+  return products.map(product => {
+    const item = byProduct.get(String(product._id));
+    return { ...product, rating: item ? Math.round(item.rating * 10) / 10 : 0, reviewCount: item?.reviewCount || 0 };
+  });
+}
+
+const productReviewInput = z.object({ name: z.string().trim().min(2).max(100), email: z.string().trim().email().max(254), rating: z.number().int().min(1).max(5), body: z.string().trim().min(5).max(3000), media: z.string().max(3000000).optional().default('') }).strict();
+app.get('/api/storefront/products/:productId/reviews', asyncRoute(async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.productId)) return fail(res, 'Invalid product id.');
+  const product = await Product.findOne({ _id: req.params.productId, active: true }).select('_id');
+  if (!product) return fail(res, 'Product not found.', 404);
+  const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, Number.parseInt(req.query.limit, 10) || 10));
+  const filter = { product: product._id, approved: true };
+  const [reviews, reviewCount, summary] = await Promise.all([
+    ProductReview.find(filter).select('name rating body media createdAt').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+    ProductReview.countDocuments(filter),
+    ProductReview.aggregate([{ $match: filter }, { $group: { _id: '$product', rating: { $avg: '$rating' } } }])
+  ]);
+  const stats = summary[0] ? { rating: Math.round(summary[0].rating * 10) / 10, reviewCount } : { rating: 0, reviewCount: 0 };
+  res.set('Cache-Control', 'no-store');
+  return res.json({ reviews, ...stats, page, limit, pages: Math.max(1, Math.ceil(reviewCount / limit)) });
+}));
+app.post('/api/storefront/products/:productId/reviews', productReviewRateLimit, objectBody(productReviewInput), asyncRoute(async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.productId)) return fail(res, 'Invalid product id.');
+  const product = await Product.findOne({ _id: req.params.productId, active: true }).select('_id');
+  if (!product) return fail(res, 'Product not found.', 404);
+  const email = req.body.email.toLowerCase();
+  if (await ProductReview.exists({ product: product._id, email })) return fail(res, 'You have already reviewed this product.', 409);
+  const review = await ProductReview.create({ ...req.body, email, product: product._id });
+  const stats = await refreshProductReviewStats(product._id);
+  return res.status(201).json({ review: { _id: review._id, name: review.name, rating: review.rating, body: review.body, media: review.media, createdAt: review.createdAt }, ...stats });
+}));
+
 app.get('/api/storefront/products', asyncRoute(async (req, res) => {
   const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
   const limit = Math.min(48, Math.max(1, Number.parseInt(req.query.limit, 10) || 9));
@@ -191,13 +246,19 @@ app.get('/api/storefront/products', asyncRoute(async (req, res) => {
     }
     filter.category = { $in: names };
   }
-  const [total, products] = await Promise.all([
+  const [total, productRows] = await Promise.all([
     Product.countDocuments(filter),
     Product.find(filter).sort({ sortOrder: 1, createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean()
   ]);
+  const products = await addProductReviewStats(productRows);
   res.set('Cache-Control', 'no-store');
   return res.json({ products, page, limit, total, pages: Math.max(1, Math.ceil(total / limit)), keyword, category: categoryName || 'All rugs' });
 })); const newsletterInput = z.object({ email: z.string().trim().email().max(254) }).strict();
+const contactMessageInput = z.object({ name: z.string().trim().min(2).max(100), email: z.string().trim().email().max(254), phone: z.string().trim().max(30).optional().default(''), subject: z.string().trim().max(160).optional().default('Contact enquiry'), message: z.string().trim().min(5).max(5000) }).strict();
+app.post('/api/storefront/contact', objectBody(contactMessageInput), asyncRoute(async (req, res) => {
+  const contactMessage = await ContactMessage.create(req.body);
+  return res.status(201).json({ submitted: true, id: contactMessage._id });
+}));
 app.post('/api/storefront/newsletter', objectBody(newsletterInput), asyncRoute(async (req, res) => {
   const email = req.body.email.toLowerCase();
   const subscriber = await NewsletterSubscriber.findOneAndUpdate({ email }, { $setOnInsert: { email } }, { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true });
@@ -207,12 +268,15 @@ app.post('/api/storefront/newsletter', objectBody(newsletterInput), asyncRoute(a
     Settings.findOne({ key: 'storefront' }).lean(), Category.find({ active: true }).sort({ sortOrder: 1, name: 1 }).lean(),
     Product.find({ active: true }).sort({ sortOrder: 1, createdAt: -1 }).lean(), Page.find({ active: true }).lean(), Offer.find({ active: true }).sort({ sortOrder: 1, createdAt: 1 }).select('message sortOrder').lean()
   ]);
+  const productsWithReviews = await addProductReviewStats(products);
   res.set('Cache-Control', 'no-store');
-  res.json({ settings: settings || {}, categories, products, pages, offers });
+  res.json({ settings: settings || {}, categories, products: productsWithReviews, pages, offers });
 }));
 app.use('/api/admin', auth);
 app.get('/api/admin/orders', asyncRoute(async (_req, res) => res.json(await Order.find().sort({ createdAt: -1 }).lean())));
 app.get('/api/admin/newsletter-subscribers', asyncRoute(async (_req, res) => res.json(await NewsletterSubscriber.find().sort({ createdAt: -1 }).lean())));
+app.get('/api/admin/contact-messages', asyncRoute(async (_req, res) => res.json(await ContactMessage.find().sort({ createdAt: -1 }).lean())));
+app.get('/api/admin/product-reviews', asyncRoute(async (_req, res) => res.json(await ProductReview.find().populate('product', 'name category').sort({ createdAt: -1 }).lean())));
 const orderStatusInput = z.object({ status: z.enum(['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled']) }).strict();
 app.put('/api/admin/orders/:id/status', objectBody(orderStatusInput), asyncRoute(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 'Invalid order id.');

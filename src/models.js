@@ -56,6 +56,9 @@ const productSchema = new Schema({
   category: { type: String, required: true, index: true },
   tag: { type: String, default: '' },
   featured: { type: Boolean, default: false },
+  youMayAlsoLike: { type: Boolean, default: false, index: true },
+  rating: { type: Number, min: 0, max: 5, default: 0 },
+  reviewCount: { type: Number, min: 0, default: 0 },
   active: { type: Boolean, default: true },
   stock: { type: Number, default: 0, min: 0 },
   sortOrder: { type: Number, default: 0 }
@@ -103,4 +106,25 @@ export const Settings = model('Settings', settingsSchema);
 export const Order = model('Order', orderSchema);
 export const Offer = model('Offer', offerSchema);const newsletterSubscriberSchema = new Schema({ email: { type: String, required: true, unique: true, lowercase: true, trim: true, maxlength: 254 } }, { timestamps: true });
 export const NewsletterSubscriber = model('NewsletterSubscriber', newsletterSubscriberSchema);
+
+const contactMessageSchema = new Schema({
+  name: { type: String, required: true, trim: true, maxlength: 100 },
+  email: { type: String, required: true, trim: true, lowercase: true, maxlength: 254 },
+  phone: { type: String, default: '', trim: true, maxlength: 30 },
+  subject: { type: String, default: 'Contact enquiry', trim: true, maxlength: 160 },
+  message: { type: String, required: true, trim: true, maxlength: 5000 }
+}, { timestamps: true });
+export const ContactMessage = model('ContactMessage', contactMessageSchema);
+
+const productReviewSchema = new Schema({
+  product: { type: Schema.Types.ObjectId, ref: 'Product', required: true, index: true },
+  name: { type: String, required: true, trim: true, maxlength: 100 },
+  email: { type: String, required: true, trim: true, lowercase: true, maxlength: 254 },
+  rating: { type: Number, required: true, min: 1, max: 5 },
+  body: { type: String, required: true, trim: true, minlength: 5, maxlength: 3000 },
+  media: { type: String, default: '', maxlength: 3000000 },
+  approved: { type: Boolean, default: true }
+}, { timestamps: true });
+productReviewSchema.index({ product: 1, email: 1 }, { unique: true });
+export const ProductReview = model('ProductReview', productReviewSchema);
 
