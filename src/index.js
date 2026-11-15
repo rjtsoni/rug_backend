@@ -11,6 +11,41 @@ import { Admin, Category, ContactMessage, Customer, NewsletterSubscriber, Offer,
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
+const xmlEscape = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[char]));
+const siteOrigin = () => (process.env.SITE_URL || process.env.FRONTEND_ORIGIN?.split(',').map(origin => origin.trim()).find(origin => /^https?:\/\/(?!localhost|127\.)/i.test(origin)) || 'https://tanuexport.netlify.app').replace(/\/$/, '');
+async function generateSitemap() {
+  const [products, categories, pages] = await Promise.all([
+    Product.find({ active: true }).select('slug updatedAt').lean(),
+    Category.find({ active: true }).select('name updatedAt').lean(),
+    Page.find({ active: true }).select('key updatedAt').lean()
+  ]);
+  const origin = siteOrigin();
+  const entries = [
+    { loc: origin, priority: '1.0', changefreq: 'daily' },
+    { loc: `${origin}/contact`, priority: '0.5', changefreq: 'monthly' },
+    ...categories.map(item => ({ loc: `${origin}/collections/${encodeURIComponent(item.name)}`, lastmod: item.updatedAt, priority: '0.8', changefreq: 'weekly' })),
+    ...products.map(item => ({ loc: `${origin}/products/${encodeURIComponent(item.slug)}`, lastmod: item.updatedAt, priority: '0.8', changefreq: 'weekly' })),
+    ...pages.map(item => ({ loc: `${origin}/pages/${encodeURIComponent(item.key)}`, lastmod: item.updatedAt, priority: '0.5', changefreq: 'monthly' }))
+  ];
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.map(item => `  <url><loc>${xmlEscape(item.loc)}</loc>${item.lastmod ? `<lastmod>${new Date(item.lastmod).toISOString().slice(0, 10)}</lastmod>` : ''}<changefreq>${item.changefreq}</changefreq><priority>${item.priority}</priority></url>`).join('\n')}\n</urlset>`;
+}
+let sitemapCache = '';
+let sitemapCacheAt = 0;
+async function refreshSitemapCache() {
+  sitemapCache = await generateSitemap();
+  sitemapCacheAt = Date.now();
+  console.log(`Sitemap refreshed at ${new Date(sitemapCacheAt).toISOString()}`);
+}
+function scheduleDailySitemapRefresh() {
+  const now = new Date();
+  const nextUtcMidnight = new Date(now);
+  nextUtcMidnight.setUTCHours(24, 0, 0, 0);
+  const timer = setTimeout(async () => {
+    try { await refreshSitemapCache(); } catch (error) { console.error('Daily sitemap refresh failed:', error.message); }
+    scheduleDailySitemapRefresh();
+  }, nextUtcMidnight.getTime() - now.getTime());
+  timer.unref?.();
+}
 const origins = new Set([
   ...(process.env.FRONTEND_ORIGIN || 'http://localhost:5173,http://localhost:5174').split(',').map(x => x.trim()),
   'https://tanuexport.netlify.app',
@@ -76,6 +111,13 @@ console.log(hash, "======");
 
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected' }));
+app.get('/sitemap.xml', asyncRoute(async (_req, res) => {
+  if (!sitemapCache || Date.now() - sitemapCacheAt > 86400000) await refreshSitemapCache();
+  res.type('application/xml').set('Cache-Control', 'public, max-age=3600').send(sitemapCache);
+}));
+app.get('/robots.txt', (_req, res) => {
+  res.type('text/plain').send(`User-agent: *\nAllow: /\nDisallow: /cart\nDisallow: /checkout\nSitemap: ${siteOrigin()}/sitemap.xml\n`);
+});
 app.get('/api/auth/setup-status', (_req, res) => res.json({ registrationOpen: true }));
 app.post('/api/auth/register', objectBody(adminRegisterInput), asyncRoute(async (req, res) => {
   if (!process.env.JWT_SECRET) return fail(res, 'JWT_SECRET is not configured on the server.', 503);
@@ -349,6 +391,10 @@ app.use((err, _req, res, _next) => {
 });
 
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/aara_rugs')
-  .then(() => app.listen(port, () => console.log(`Aara API ready on http://localhost:${port}`)))
+  .then(async () => {
+    try { await refreshSitemapCache(); } catch (error) { console.error('Initial sitemap generation failed:', error.message); }
+    scheduleDailySitemapRefresh();
+    app.listen(port, () => console.log(`Aara API ready on http://localhost:${port}`));
+  })
   .catch(error => { console.error('MongoDB connection failed:', error.message); process.exit(1); });
 
