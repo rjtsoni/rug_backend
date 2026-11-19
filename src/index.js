@@ -103,7 +103,7 @@ const objectBody = schema => (req, res, next) => {
   req.body = parsed.data; return next();
 };
 const categoryInput = z.object({ name: z.string().trim().min(1), slug: z.string().trim().min(1), description: z.string().optional(), image: z.string().optional(), note: z.string().optional(), parentCategory: z.string().regex(/^[a-f\d]{24}$/i).nullable().optional(), active: z.boolean().optional(), sortOrder: z.number().optional() }).strict();
-const productInput = z.object({ name: z.string().trim().min(1), slug: z.string().trim().min(1), type: z.string().optional(), description: z.string().optional(), price: z.number().nonnegative(), discountPercentage: z.number().int().min(0).max(100).optional(), compareAtPrice: z.number().nonnegative().nullable().optional(), image: z.string().optional(), images: z.array(z.string()).optional(), sizes: z.array(z.object({ label: z.string().trim().min(1), price: z.number().nonnegative(), discountPercentage: z.number().int().min(0).max(100).default(0), images: z.array(z.string()).min(1).max(4) }).strict()).optional(), details: z.object({ sku: z.string().optional(), material: z.string().optional(), texture: z.string().optional(), pileThickness: z.string().optional(), origin: z.string().optional(), highlights: z.string().optional(), care: z.string().optional(), delivery: z.string().optional(), returns: z.string().optional(), freeDelivery: z.boolean().optional(), deliveryCharge: z.number().nonnegative().optional(), craftImage: z.string().optional(), craftEyebrow: z.string().optional(), craftTitle: z.string().optional(), craftDescription: z.string().optional(), craftSecondParagraph: z.string().optional(), craftPoint1Title: z.string().optional(), craftPoint1Caption: z.string().optional(), craftPoint2Title: z.string().optional(), craftPoint2Caption: z.string().optional(), craftPoint3Title: z.string().optional(), craftPoint3Caption: z.string().optional(), craftStep1Title: z.string().optional(), craftStep1Body: z.string().optional(), craftStep2Title: z.string().optional(), craftStep2Body: z.string().optional(), craftStep3Title: z.string().optional(), craftStep3Body: z.string().optional(), craftExpectTitle: z.string().optional(), craftExpect1: z.string().optional(), craftExpect2: z.string().optional(), craftExpect3: z.string().optional() }).strict().optional(), palette: z.array(z.string()).optional(), design: z.string().optional(), category: z.string().min(1), tag: z.string().optional(), featured: z.boolean().optional(), youMayAlsoLike: z.boolean().optional(), active: z.boolean().optional(), stock: z.number().int().nonnegative().optional(), sortOrder: z.number().optional() }).strict();
+const productInput = z.object({ name: z.string().trim().min(1), slug: z.string().trim().min(1), type: z.string().optional(), description: z.string().optional(), price: z.number().nonnegative(), discountPercentage: z.number().int().min(0).max(100).optional(), compareAtPrice: z.number().nonnegative().nullable().optional(), image: z.string().optional(), images: z.array(z.string()).optional(), sizes: z.array(z.object({ label: z.string().trim().min(1), width: z.number().nonnegative(), height: z.number().nonnegative(), squareFeet: z.number().nonnegative(), pricePerSqFt: z.number().nonnegative(), price: z.number().nonnegative(), discountPercentage: z.number().int().min(0).max(100).default(0), images: z.array(z.string()).min(1).max(4) }).strict()).optional(), details: z.object({ sku: z.string().optional(), material: z.string().optional(), texture: z.string().optional(), pileThickness: z.string().optional(), origin: z.string().optional(), highlights: z.string().optional(), care: z.string().optional(), delivery: z.string().optional(), returns: z.string().optional(), freeDelivery: z.boolean().optional(), deliveryCharge: z.number().nonnegative().optional(), craftImage: z.string().optional(), craftEyebrow: z.string().optional(), craftTitle: z.string().optional(), craftDescription: z.string().optional(), craftSecondParagraph: z.string().optional(), craftPoint1Title: z.string().optional(), craftPoint1Caption: z.string().optional(), craftPoint2Title: z.string().optional(), craftPoint2Caption: z.string().optional(), craftPoint3Title: z.string().optional(), craftPoint3Caption: z.string().optional(), craftStep1Title: z.string().optional(), craftStep1Body: z.string().optional(), craftStep2Title: z.string().optional(), craftStep2Body: z.string().optional(), craftStep3Title: z.string().optional(), craftStep3Body: z.string().optional(), craftExpectTitle: z.string().optional(), craftExpect1: z.string().optional(), craftExpect2: z.string().optional(), craftExpect3: z.string().optional() }).strict().optional(), palette: z.array(z.string()).optional(), design: z.string().optional(), category: z.string().min(1), tag: z.string().optional(), featured: z.boolean().optional(), youMayAlsoLike: z.boolean().optional(), active: z.boolean().optional(), stock: z.number().int().nonnegative().optional(), sortOrder: z.number().optional() }).strict();
 const pageInput = z.object({ key: z.string().trim().min(1), title: z.string().optional(), subtitle: z.string().optional(), body: z.string().optional(), image: z.string().optional(), active: z.boolean().optional() }).strict();
 const offerInput = z.object({ message: z.string().trim().min(1).max(160), active: z.boolean().default(true), sortOrder: z.number().int().min(0).default(0) }).strict();
 const hash = await bcrypt.hash('x1XeBw5wJOaP87HRQAsSuurC8Jx4P6DEbXjJpiUPmWIF3dGlzpx32', 12);
@@ -151,9 +151,28 @@ app.post('/api/customer/login', objectBody(loginInput), asyncRoute(async (req, r
   setSession(res, 'rugs_customer_token', { role: 'customer', customerId: String(customer._id), email: customer.email });
   return res.json({ customer: { id: customer._id, name: customer.name, email: customer.email, mobile: customer.mobile } });
 }));
-app.get('/api/customer/me', customerAuth, asyncRoute(async (req, res) => {
-  const customer = await Customer.findById(req.customer.customerId).select('name email mobile address city state postalCode').lean();
-  return customer ? res.json({ customer }) : fail(res, 'Customer account not found.', 401);
+app.get('/api/customer/me', asyncRoute(async (req, res) => {
+  const token = readCookie(req, 'rugs_customer_token');
+  if (!token) return res.json({ customer: null });
+
+  let session;
+  try {
+    session = jwt.verify(token, process.env.JWT_SECRET);
+  } catch {
+    clearSession(res, 'rugs_customer_token');
+    return res.json({ customer: null });
+  }
+  if (session.role !== 'customer' || !session.customerId) {
+    clearSession(res, 'rugs_customer_token');
+    return res.json({ customer: null });
+  }
+
+  const customer = await Customer.findById(session.customerId).select('name email mobile address city state postalCode').lean();
+  if (!customer) {
+    clearSession(res, 'rugs_customer_token');
+    return res.json({ customer: null });
+  }
+  return res.json({ customer });
 }));
 const customerProfileInput = z.object({
   name: z.string().trim().min(2).max(100),
@@ -174,9 +193,7 @@ const customerOrderInput = z.object({
   shipping: z.object({ name: z.string().trim().min(2).max(100), email: z.string().trim().email().max(254), mobile: z.string().trim().min(7).max(25), address: z.string().trim().min(5).max(500), city: z.string().trim().min(2).max(100), state: z.string().trim().max(100).optional().default(''), postalCode: z.string().trim().min(3).max(20) }).strict(),
   items: z.array(z.object({ productId: z.string().regex(/^[a-f\d]{24}$/i), size: z.string().trim().max(80).optional().default(''), quantity: z.number().int().min(1).max(20) }).strict()).min(1).max(50)
 }).strict();
-app.post('/api/customer/orders', customerAuth, objectBody(customerOrderInput), asyncRoute(async (req, res) => {
-  const customer = await Customer.findById(req.customer.customerId).select('name email mobile address city state postalCode');
-  if (!customer) return fail(res, 'Customer account not found.', 401);
+const createOrder = async (req, res, customer = null) => {
   const products = await Product.find({ _id: { $in: req.body.items.map(item => item.productId) }, active: true }).lean();
   const productMap = new Map(products.map(item => [String(item._id), item]));
   const orderItems = [];
@@ -187,15 +204,21 @@ app.post('/api/customer/orders', customerAuth, objectBody(customerOrderInput), a
     if ((product.sizes || []).length && !variant) return fail(res, `Choose a valid size for ${product.name}.`);
     const regularPrice = Number(variant?.price ?? product.price) || 0;
     const discount = Math.min(100, Math.max(0, Number(variant?.discountPercentage ?? product.discountPercentage) || 0));
-    const unitPrice = Math.round(regularPrice * (1 - discount / 100));
+    const unitPrice = Math.round(regularPrice * (1 - discount / 100) * 100) / 100;
     orderItems.push({ product: product._id, name: product.name, sku: product.details?.sku || '', image: variant?.images?.[0] || product.image || product.images?.[0] || '', size: line.size, unitPrice, quantity: line.quantity, lineTotal: unitPrice * line.quantity });
   }
   const shipping = { ...req.body.shipping, email: req.body.shipping.email.toLowerCase() };
-  await Customer.findByIdAndUpdate(customer._id, { $set: shipping });
+  if (customer) await Customer.findByIdAndUpdate(customer._id, { $set: shipping });
   const subtotal = orderItems.reduce((sum, item) => sum + item.lineTotal, 0);
-  const order = await Order.create({ orderNumber: `AARA-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`, customer: customer._id, customerDetails: shipping, items: orderItems, subtotal, shippingCharge: 0, total: subtotal, status: 'pending', paymentStatus: 'unpaid' });
+  const order = await Order.create({ orderNumber: `AARA-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`, customer: customer?._id || null, customerDetails: shipping, items: orderItems, subtotal, shippingCharge: 0, total: subtotal, status: 'pending', paymentStatus: 'unpaid' });
   return res.status(201).json({ order });
+};
+app.post('/api/customer/orders', customerAuth, objectBody(customerOrderInput), asyncRoute(async (req, res) => {
+  const customer = await Customer.findById(req.customer.customerId).select('name email mobile address city state postalCode');
+  if (!customer) return fail(res, 'Customer account not found.', 401);
+  return createOrder(req, res, customer);
 }));
+app.post('/api/storefront/orders', rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, standardHeaders: 'draft-7', legacyHeaders: false }), objectBody(customerOrderInput), asyncRoute(async (req, res) => createOrder(req, res)));
 app.get('/api/customer/favorites', customerAuth, asyncRoute(async (req, res) => {
   const customer = await Customer.findById(req.customer.customerId).populate({ path: 'favorites', match: { active: true } }).lean();
   return customer ? res.json({ products: customer.favorites || [] }) : fail(res, 'Customer account not found.', 401);
