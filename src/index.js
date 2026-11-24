@@ -49,8 +49,9 @@ function scheduleDailySitemapRefresh() {
 const origins = new Set([
   ...(process.env.FRONTEND_ORIGIN || 'http://localhost:5173,http://localhost:5174').split(',').map(x => x.trim()),
   'https://tanuexport.netlify.app',
-  'https://tanurugsadmin.netlify.app'
-]);
+  'https://tanurugsadmin.netlify.app',
+  "https://tanurugs.com",
+  "https://www.tanurugs.com"]);
 app.use(helmet());
 app.use(cors({ origin: (origin, done) => !origin || origins.has(origin) ? done(null, true) : done(new Error('Origin not allowed')), credentials: true }));
 app.use(express.json({ limit: '12mb' }));
