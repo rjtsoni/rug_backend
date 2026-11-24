@@ -51,7 +51,10 @@ const origins = new Set([
   'https://tanuexport.netlify.app',
   'https://tanurugsadmin.netlify.app',
   "https://tanurugs.com",
-  "https://www.tanurugs.com"]);
+  "https://api.tanurugs.com",
+  "https://www.tanurugs.com",
+  "https://admin.tanurugs.com"
+]);
 app.use(helmet());
 app.use(cors({ origin: (origin, done) => !origin || origins.has(origin) ? done(null, true) : done(new Error('Origin not allowed')), credentials: true }));
 app.use(express.json({ limit: '12mb' }));
@@ -188,9 +191,14 @@ app.put('/api/customer/profile', customerAuth, objectBody(customerProfileInput),
   return res.json({ customer });
 }));
 app.post('/api/customer/logout', (_req, res) => { clearSession(res, 'rugs_customer_token'); return res.json({ loggedOut: true }); });
+const customOrderSizeInput = z.object({
+  height: z.number().positive().max(100),
+  width: z.number().positive().max(100),
+  unit: z.literal('ft').default('ft')
+}).strict();
 const customerOrderInput = z.object({
   shipping: z.object({ name: z.string().trim().min(2).max(100), email: z.string().trim().email().max(254), mobile: z.string().trim().min(7).max(25), address: z.string().trim().min(5).max(500), city: z.string().trim().min(2).max(100), state: z.string().trim().max(100).optional().default(''), postalCode: z.string().trim().min(3).max(20) }).strict(),
-  items: z.array(z.object({ productId: z.string().regex(/^[a-f\d]{24}$/i), size: z.string().trim().max(80).optional().default(''), quantity: z.number().int().min(1).max(20) }).strict()).min(1).max(50)
+  items: z.array(z.object({ productId: z.string().regex(/^[a-f\d]{24}$/i), size: z.string().trim().max(80).optional().default(''), quantity: z.number().int().min(1).max(20), fringes: z.enum(['with fringes', 'without fringes']).optional().default('without fringes'), customSize: customOrderSizeInput.optional() }).strict()).min(1).max(50)
 }).strict();
 const createOrder = async (req, res, customer = null) => {
   const products = await Product.find({ _id: { $in: req.body.items.map(item => item.productId) }, active: true }).lean();
@@ -199,12 +207,14 @@ const createOrder = async (req, res, customer = null) => {
   for (const line of req.body.items) {
     const product = productMap.get(line.productId);
     if (!product) return fail(res, 'A product in your cart is no longer available.', 404);
-    const variant = (product.sizes || []).find(item => item.label === line.size);
-    if ((product.sizes || []).length && !variant) return fail(res, `Choose a valid size for ${product.name}.`);
-    const regularPrice = Number(variant?.price ?? product.price) || 0;
-    const discount = Math.min(100, Math.max(0, Number(variant?.discountPercentage ?? product.discountPercentage) || 0));
+    const variant = line.customSize ? null : (product.sizes || []).find(item => item.label === line.size);
+    if (!line.customSize && (product.sizes || []).length && !variant) return fail(res, `Choose a valid size for ${product.name}.`);
+    const regularPrice = line.customSize
+      ? line.customSize.height * line.customSize.width * 15
+      : Number(variant?.price ?? product.price) || 0;
+    const discount = line.customSize ? 0 : Math.min(100, Math.max(0, Number(variant?.discountPercentage ?? product.discountPercentage) || 0));
     const unitPrice = Math.round(regularPrice * (1 - discount / 100) * 100) / 100;
-    orderItems.push({ product: product._id, name: product.name, sku: product.details?.sku || '', image: variant?.images?.[0] || product.image || product.images?.[0] || '', size: line.size, unitPrice, quantity: line.quantity, lineTotal: unitPrice * line.quantity });
+    orderItems.push({ product: product._id, name: product.name, sku: product.details?.sku || '', image: variant?.images?.[0] || product.image || product.images?.[0] || '', size: line.customSize ? `Custom ${line.customSize.height} × ${line.customSize.width} ft` : line.size, fringes: line.fringes, ...(line.customSize ? { customSize: line.customSize } : {}), unitPrice, quantity: line.quantity, lineTotal: unitPrice * line.quantity });
   }
   const shipping = { ...req.body.shipping, email: req.body.shipping.email.toLowerCase() };
   if (customer) await Customer.findByIdAndUpdate(customer._id, { $set: shipping });

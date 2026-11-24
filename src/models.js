@@ -73,7 +73,7 @@ const orderSchema = new Schema({
   orderNumber: { type: String, required: true, unique: true, index: true },
   customer: { type: Schema.Types.ObjectId, ref: 'Customer', default: null, index: true },
   customerDetails: { name: { type: String, required: true }, email: { type: String, required: true }, mobile: { type: String, required: true }, address: { type: String, required: true }, city: { type: String, required: true }, state: { type: String, default: '' }, postalCode: { type: String, required: true } },
-  items: [{ product: { type: Schema.Types.ObjectId, ref: 'Product' }, name: { type: String, required: true }, sku: { type: String, default: '' }, image: { type: String, default: '' }, size: { type: String, default: '' }, unitPrice: { type: Number, required: true, min: 0 }, quantity: { type: Number, required: true, min: 1 }, lineTotal: { type: Number, required: true, min: 0 } }],
+  items: [{ product: { type: Schema.Types.ObjectId, ref: 'Product' }, name: { type: String, required: true }, sku: { type: String, default: '' }, image: { type: String, default: '' }, size: { type: String, default: '' }, fringes: { type: String, enum: ['with fringes', 'without fringes'], default: 'without fringes' }, customSize: { height: { type: Number, min: 0 }, width: { type: Number, min: 0 }, unit: { type: String, enum: ['ft'] }, fringes: { type: String, enum: ['with fringes', 'without fringes'] } }, unitPrice: { type: Number, required: true, min: 0 }, quantity: { type: Number, required: true, min: 1 }, lineTotal: { type: Number, required: true, min: 0 } }],
   subtotal: { type: Number, required: true, min: 0 },
   shippingCharge: { type: Number, default: 0, min: 0 },
   total: { type: Number, required: true, min: 0 },
