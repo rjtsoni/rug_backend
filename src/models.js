@@ -98,13 +98,14 @@ const settingsSchema = new Schema({
   navigation: { type: [Schema.Types.Mixed], default: [] },
   footer: { type: Schema.Types.Mixed, default: {} }
 }, { timestamps: true });
+console.log('Mongoose models initialized.');
 
 export const Category = model('Category', categorySchema);
 export const Product = model('Product', productSchema);
 export const Page = model('Page', pageSchema);
 export const Settings = model('Settings', settingsSchema);
 export const Order = model('Order', orderSchema);
-export const Offer = model('Offer', offerSchema);const newsletterSubscriberSchema = new Schema({ email: { type: String, required: true, unique: true, lowercase: true, trim: true, maxlength: 254 } }, { timestamps: true });
+export const Offer = model('Offer', offerSchema); const newsletterSubscriberSchema = new Schema({ email: { type: String, required: true, unique: true, lowercase: true, trim: true, maxlength: 254 } }, { timestamps: true });
 export const NewsletterSubscriber = model('NewsletterSubscriber', newsletterSubscriberSchema);
 
 const contactMessageSchema = new Schema({
